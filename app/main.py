@@ -3,7 +3,7 @@ import os, json
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.responses import JSONResponse
 from .utils import make_workdir, cleanup_workdir
-from .planner import plan_for_questions
+from .planner import plan_for_question
 from .executor import execute_steps
 from .config import settings
 
