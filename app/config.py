@@ -11,8 +11,12 @@ DEFAULT_MODEL = "openai/gpt-4.1-nano"
 
 class Settings:
     def __init__(self):
-        self.aipipe_token = os.getenv("AIPIPE_TOKEN")
-        self.aipipe_api_base = "https://aipipe.org/openrouter/v1"
-        self.default_model = "openai/gpt-4.1-nano"
+        self.AIPIPE_TOKEN = os.getenv("AIPIPE_TOKEN")
+        self.AIPIPE_API_BASE = "https://aipipe.org/openrouter/v1"
+        self.DEFAULT_MODEL = "openai/gpt-4.1-nano"
+
+        # Runtime settings
+        self.WORK_DIR = os.getenv("WORK_DIR", "/tmp")
+        self.MAX_JOB_SECONDS = int(os.getenv("MAX_JOB_SECONDS", "300"))
 
 settings = Settings()
