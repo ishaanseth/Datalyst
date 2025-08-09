@@ -1,0 +1,22 @@
+
+version: '3.8'
+services:
+  web:
+    build: ./docker/web
+    ports:
+      - "8000:8000"
+    environment:
+      - LLM_API_KEY=${LLM_API_KEY:-}
+    volumes:
+      - ./app:/app/app
+  worker:
+    build: ./docker/worker
+    environment:
+      - LLM_API_KEY=${LLM_API_KEY:-}
+    volumes:
+      - ./app:/app/app
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 512M
