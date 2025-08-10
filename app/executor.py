@@ -119,8 +119,26 @@ def execute_steps(steps, workdir):
             plt.close(fig)
             results[sid] = {"type":"image","path":out, "uri": image_to_data_uri(out, mime='image/png')}
         elif stype == "return":
-            src = args.get("from")
-            results["__final__"] = results.get(src, {"type":"text","value":"(missing)"})
+            # The 'from' arg should now be a list of step IDs
+            from_steps = args.get("from") 
+            if not isinstance(from_steps, list):
+                # Handle the old way for backward compatibility, but log a warning
+                print("WARNING: 'from' in return step should be a list. Treating as single item.")
+                from_steps = [from_steps]
+
+            final_result = []
+            for step_id in from_steps:
+                if step_id in results:
+                    # Append the value of the step to our final list
+                    result_value = results[step_id].get("value")
+                    if results[step_id].get("type") == "image":
+                        result_value = results[step_id].get("uri")
+                    final_result.append(result_value)
+                else:
+                    final_result.append(None) # Add a placeholder if a step is missing
+            
+            # This special key now holds a list of the final results
+            results["__final__"] = {"type": "list", "value": final_result}
         else:
             raise NotImplementedError(f"Unknown step type {stype}")
     return results
