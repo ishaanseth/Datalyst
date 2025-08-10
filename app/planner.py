@@ -24,42 +24,56 @@ The value of "plan" must be a JSON array of step objects.
 Each step object must have keys "id", "type", and "args".
 
 **Rules for Steps:**
-1.  **Allowed Step Types:** The "type" key must be one of: {json.dumps(allowed_types)}.
-2.  **`run_python` Code:** For "run_python" steps, the "code" value is a JSON string. All backslashes (\\) and double quotes (") inside the Python code MUST be properly escaped (as \\\\ and \\").
-3.  **Final Answer:** The LAST step MUST be `type: "return"`. Its `from` argument must point to the `id` of the step that produces the final answer.
+1.  **Data Flow:** The output of one step is used by another via the 'from' or 'df_ref' argument, which must point to a previous step's 'id'.
+2.  **Allowed Step Types:** The "type" key must be one of: {json.dumps(allowed_types)}.
+3.  **`run_python` Code:** For "run_python" steps, the "code" value is a JSON string. All backslashes (\\) and double quotes (") inside the Python code MUST be properly escaped. The script can read files saved by previous steps and its output is what it prints to standard output.
+4.  **`return` Step:** The final step must be of type "return". Its "from" argument must be a JSON array of previous step "id"s to be assembled into the final response.
 
-**Example Plan:**
+**Example Plan for a Multi-Part Question:**
+
 {{
-    "plan": [
-      {{
-        "id": "question_1_answer",
-        "type": "run_python",
-        "args": {{"code": "print(1)"}}
-      }},
-      {{
-        "id": "question_2_answer",
-        "type": "run_python",
-        "args": {{"code": "print('Titanic')"}}
-      }},
-      {{
-        "id": "question_3_plot",
-        "type": "plot",
-        "args": {{ ... }}
-      }},
-      {{
-        "id": "final_assembly",
-        "type": "return",
-        "args": {{"from": ["question_1_answer", "question_2_answer", "question_3_plot"]}}
+  "plan": [
+    {{
+      "id": "get_webpage",
+      "type": "fetch_url",
+      "args": {{"url": "https://example.com/data", "save_as": "page.html"}}
+    }},
+    {{
+      "id": "get_table_from_page",
+      "type": "extract_table",
+      "args": {{"from": "get_webpage", "save_as": "data.csv"}}
+    }},
+    {{
+      "id": "answer_question_1",
+      "type": "run_python",
+      "args": {{"code": "import pandas as pd; df = pd.read_csv('data.csv'); print(len(df[df['Year'] < 2000]))"}}
+    }},
+    {{
+      "id": "answer_question_2",
+      "type": "run_python",
+      "args": {{"code": "import pandas as pd; df = pd.read_csv('data.csv'); print(df['Movie'].iloc[0])"}}
+    }},
+    {{
+      "id": "create_plot",
+      "type": "plot",
+      "args": {{
+          "df_ref": "get_table_from_page", 
+          "x": "Rank", "y": "Peak", 
+          "regression": true, "save_as": "plot.png"
       }}
-    ]
+    }},
+    {{
+      "id": "final_response",
+      "type": "return",
+      "args": {{"from": ["answer_question_1", "answer_question_2", "create_plot"]}}
+    }}
+  ]
 }}
 
 The user has provided the following files: {json.dumps(available_files)}.
 
-Here is the user's question:
+Now, generate the complete JSON object response for the user's question:
 \"\"\"{question_text}\"\"\"
-
-Now, generate the complete JSON object response.
 """
 
     plan_str = await call_llm(
