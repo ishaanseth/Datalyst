@@ -20,8 +20,8 @@ The value of "plan" must be a JSON array of step objects.
 **Rules for Steps:**
 1.  **Data Flow:** The output of one step is used by another via the 'from' or 'df_ref' argument.
 2.  **Allowed Step Types:** The "type" key must be one of: {json.dumps(allowed_types)}.
-3.  **`run_python` Code:** The "code" argument for "run_python" steps MUST be a JSON array of strings, where each string is a single line of Python code. Do not use a single string with '\\n'.
-4.  **`return` Step:** The final step must be of type "return". Its "from" argument must be a JSON array of previous step "id"s.
+4.  **`run_python` Output:** The script's result is what it prints to standard output. Therefore, the VERY LAST LINE of code in the "code" array MUST be a `print()` statement that outputs the final variable.
+5.  **`return` Step:** The final step must be of type "return". Its "from" argument must be a JSON array of previous step "id"s.
 
 **Example Plan:**
 
