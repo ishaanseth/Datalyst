@@ -13,4 +13,3 @@ lxml
 aiofiles
 python-multipart
 requests
-logging
