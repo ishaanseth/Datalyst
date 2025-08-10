@@ -1,7 +1,7 @@
-# executor.py (Final Corrected Version)
+# executor.py (Final Completed Version)
 
 import subprocess, json, os, shlex, time, duckdb, pandas as pd
-import codecs  # <--- IMPORT THE CODECS MODULE
+import codecs
 from .utils import image_to_data_uri
 from .config import settings
 
@@ -24,10 +24,9 @@ def execute_steps(steps, workdir):
         print(f"--- EXECUTING STEP: {sid} ({stype}) ---")
 
         if stype == "fetch_url":
-            import httpx
-            # The LLM sometimes adds semicolons; we will robustly remove them here.
             url = args["url"].rstrip(";")
             save_as = os.path.join(workdir, args.get("save_as", sid + ".html"))
+            import httpx
             r = httpx.get(url, timeout=timeout)
             with open(save_as, "wb") as f:
                 f.write(r.content)
@@ -56,38 +55,49 @@ def execute_steps(steps, workdir):
             out = os.path.join(workdir, args.get("save_as", sid + ".csv"))
             df.to_csv(out, index=False)
             results[sid] = {"type":"csv","path":out}
-        
         elif stype == "run_python":
             code = args["code"]
-            
-            # --- THIS IS THE FINAL FIX ---
-            # The 'code' string has literal '\n', etc. We need to decode these escapes.
             decoded_code = codecs.decode(code, 'unicode_escape')
-            
             script_path = os.path.join(workdir, sid + ".py")
             with open(script_path, "w", encoding="utf-8") as f:
-                f.write(decoded_code) # Write the decoded code
-            
+                f.write(decoded_code)
             try:
                 stdout, stderr, rc = run_shell(f"python {shlex.quote(script_path)}", cwd=workdir, timeout=timeout)
             except subprocess.TimeoutExpired:
                 raise TimeoutError(f"Step {sid} timed out")
-
             if rc != 0:
                 print(f"ERROR: Step {sid} (run_python) failed with return code {rc}.")
                 print(f"STDOUT:\n{stdout}")
                 print(f"STDERR:\n{stderr}")
                 raise RuntimeError(f"Execution of python script for step '{sid}' failed. See logs for details.")
-            
             print(f"Python script for step {sid} executed successfully.")
-            # The output of the python script is now considered the result
             results[sid] = {"type":"text","value":stdout}
         
+        # --- THIS IS THE COMPLETED FEATURE ---
+        elif stype == "summarize":
+            print("Summarizing data...")
+            src_id = args.get("from")
+            if not src_id or src_id not in results or results[src_id].get("type") != "csv":
+                raise ValueError(f"Invalid 'from' reference for summarize step: {src_id}")
+            
+            csv_path = results[src_id]["path"]
+            df = pd.read_csv(csv_path)
+
+            columns = args.get("columns")
+            if columns and isinstance(columns, list):
+                existing_cols = [col for col in columns if col in df.columns]
+                df = df[existing_cols]
+
+            max_rows = args.get("max_rows") or args.get("top_n")
+            if max_rows and isinstance(max_rows, int):
+                df = df.head(max_rows)
+            
+            summary_json = df.to_json(orient='records', indent=2)
+            results[sid] = {"type": "text", "value": summary_json}
+            
         elif stype == "plot":
-            # (No changes needed here, but keeping for completeness)
             df_ref = args["df_ref"]
-            if df_ref not in results:
-                raise ValueError("df_ref not found")
+            if df_ref not in results: raise ValueError("df_ref not found")
             csv_path = results[df_ref]["path"]
             df = pd.read_csv(csv_path)
             import matplotlib
@@ -108,10 +118,6 @@ def execute_steps(steps, workdir):
             fig.savefig(out, bbox_inches='tight', dpi=90)
             plt.close(fig)
             results[sid] = {"type":"image","path":out, "uri": image_to_data_uri(out, mime='image/png')}
-        elif stype == "summarize":
-            # The LLM tried to use this step with incorrect args, we'll ignore for now.
-            print(f"WARNING: The 'summarize' step is not fully implemented with the args provided by the LLM. Skipping.")
-            results[sid] = {"type":"text","value":""}
         elif stype == "return":
             src = args.get("from")
             results["__final__"] = results.get(src, {"type":"text","value":"(missing)"})
