@@ -1,17 +1,15 @@
 import json
-import logging
+import requests
 from .config import settings
-from .llm import call_llm
 
-def plan_for_question(question_text: str):
+def plan_for_question(question_text: str, available_files=None):
     """
-    Generate an execution plan for the given question, ensuring only step types
-    supported by the executor are used.
+    Generate an execution plan for the given question using AIPipe API,
+    ensuring only step types supported by executor.py are used.
     """
-    logging.info("Planning for question...")
-    logging.debug("Question text:\n%s", question_text)
+    if not settings.AIPIPE_TOKEN:
+        raise ValueError("AIPIPE_TOKEN environment variable not set.")
 
-    # List of allowed step types (MUST match executor.py exactly)
     allowed_types = [
         "fetch_url",
         "read_file",
@@ -23,26 +21,33 @@ def plan_for_question(question_text: str):
         "return"
     ]
 
-    # Prompt that forces only allowed types
+    # Build the prompt
     prompt = f"""
 You are a planning agent for a data analysis pipeline.
 
-Given the user's question, create a JSON list of steps to execute. 
-Each step must be an object with:
-  - "id": short unique name for the step (snake_case)
+User has asked the following question and provided these files:
+Question:
+\"\"\"{question_text}\"\"\"
+
+Files available:
+{available_files or []}
+
+Create a JSON list of steps to execute. 
+Each step must have:
+  - "id": short unique snake_case name
   - "type": one of {allowed_types}
   - "args": dictionary of parameters for that step
-  - Optional: "timeout" in seconds (default 30)
+  - Optional: "timeout" (default 30)
 
 Rules:
 - Only use types in {allowed_types}
-- For Python code execution, use "type": "run_python" (NOT "python")
+- For Python code, use "run_python" (NOT "python")
 - For SQL queries, use "duckdb_query"
-- If returning final output to user, use "return" step with "from" pointing to previous step id
-- Ensure steps are logically ordered so each one has its dependencies already produced
-- Save intermediate outputs using "save_as" in args when relevant
-
-Example plan:
+- If returning output, include a "return" step with "from" pointing to prior step's id
+- Ensure dependencies are produced before being used
+- Save outputs with "save_as" in args when relevant
+- Respond ONLY with JSON list, no explanations
+Example:
 [
   {{
     "id": "read_wiki",
@@ -60,33 +65,33 @@ Example plan:
     "args": {{"from": "table"}}
   }}
 ]
-
-Now create a plan for this question:
-\"\"\"{question_text}\"\"\"
-Respond ONLY with valid JSON list, no explanations.
     """
 
-    # Call the LLM to generate the plan
-    plan_str = call_llm(
-        model=settings.default_model,
-        prompt=prompt,
-        max_tokens=1500
-    )
+    # Call the AIPipe API directly
+    headers = {
+        "Authorization": f"Bearer {settings.AIPIPE_TOKEN}",
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "model": settings.DEFAULT_MODEL,
+        "messages": [{"role": "user", "content": prompt}],
+        "max_tokens": 1500
+    }
+    resp = requests.post(f"{settings.AIPIPE_API_BASE}/chat/completions", headers=headers, json=payload)
+    resp.raise_for_status()
 
-    logging.debug("Raw plan string from LLM:\n%s", plan_str)
+    data = resp.json()
+    # Adjust this if AIPipe returns in a different format
+    plan_str = data["choices"][0]["message"]["content"]
 
     try:
         plan = json.loads(plan_str)
-        logging.info("Plan parsed successfully with %d steps.", len(plan))
     except json.JSONDecodeError as e:
-        logging.error("Invalid JSON from LLM: %s", e)
-        raise ValueError(f"Invalid plan JSON: {e}")
+        raise ValueError(f"Invalid plan JSON: {e}\nRaw output:\n{plan_str}")
 
-    # Final sanity check: ensure only allowed types are present
+    # Sanity check for allowed types
     for step in plan:
-        stype = step.get("type")
-        if stype not in allowed_types:
-            raise ValueError(f"Unsupported step type in plan: {stype}")
+        if step.get("type") not in allowed_types:
+            raise ValueError(f"Unsupported step type in plan: {step.get('type')}")
 
-    logging.debug("Final parsed plan:\n%s", json.dumps(plan, indent=2))
     return plan
