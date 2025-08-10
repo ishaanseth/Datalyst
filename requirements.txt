@@ -1,4 +1,4 @@
-
+codecs
 fastapi
 uvicorn[standard]
 uvicorn
