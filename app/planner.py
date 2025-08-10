@@ -13,17 +13,18 @@ async def plan_for_question(question_text: str, available_files: list[str]):
 
     # The prompt now enforces that the 'code' argument is a list of strings.
     prompt = f"""
-You are a planning agent for a data analysis pipeline. You create a plan to answer the user's question.
+You are a planning agent for a data analysis pipeline.
 Your entire response MUST be a single JSON object with a top-level key named "plan".
 The value of "plan" must be a JSON array of step objects.
 
 **Rules for Steps:**
-1.  **Logical Analysis:** The steps must logically lead to the user's answer. For data questions, this usually involves fetching, cleaning, analyzing (e.g., sorting, filtering), and then returning the result.
-2.  **`run_python` Code:** The "code" argument for "run_python" steps MUST be a JSON array of strings, where each string is a single line of Python code.
-3.  **`run_python` Output:** The script's result is what it prints to standard output. Therefore, the VERY LAST LINE of the "code" array MUST be a `print()` statement that outputs the final result.
-4.  **`return` Step:** The final step must be of type "return". Its "from" argument must be a JSON array of previous step "id"s.
+1.  **Data Flow:** The output of one step is used by another via the 'from' or 'df_ref' argument.
+2.  **Allowed Step Types:** The "type" key must be one of: {json.dumps(allowed_types)}.
+3.  **`run_python` Code:** The "code" argument for "run_python" steps MUST be a JSON array of strings, where each string is a single line of Python code.
+4.  **`run_python` Output:** The script's result is what it prints to standard output. Therefore, the VERY LAST LINE of code in the "code" array MUST be a `print()` statement that outputs the final variable.
+5.  **`return` Step:** The final step must be of type "return". Its "from" argument must be a JSON array of previous step "id"s.
 
-**Example Plan for Analyzing Data:**
+**Example Plan:**
 
 {{
   "plan": [
@@ -38,26 +39,21 @@ The value of "plan" must be a JSON array of step objects.
       "args": {{"from": "get_webpage", "save_as": "data.csv"}}
     }},
     {{
-      "id": "analyze_data",
+      "id": "answer_question",
       "type": "run_python",
       "args": {{
         "code": [
           "import pandas as pd",
           "df = pd.read_csv('data.csv')",
-          "# Always clean data before analysis",
-          "df['Revenue'] = df['Revenue'].replace('[\\$,]', '', regex=True).astype(float)",
-          "# Always sort data to find top/bottom entries",
-          "df_sorted = df.sort_values(by='Revenue', ascending=False)",
-          "# Select the top 10 after sorting",
-          "top_10 = df_sorted.head(10)",
-          "print(top_10.to_json(orient='records'))"
+          "result_variable = len(df[df['Year'] < 2000])",
+          "print(result_variable)"
         ]
       }}
     }},
     {{
       "id": "final_response",
       "type": "return",
-      "args": {{"from": ["analyze_data"]}}
+      "args": {{"from": ["answer_question"]}}
     }}
   ]
 }}
