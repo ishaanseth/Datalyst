@@ -4,7 +4,7 @@ import json
 from .config import settings
 from .llm import call_llm
 
-def plan_for_question(question_text: str, available_files: list[str]):
+async def plan_for_question(question_text: str, available_files: list[str]):
     """
     Generate an execution plan for the given question, ensuring only step types
     supported by the executor are used.
