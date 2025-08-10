@@ -1,15 +1,15 @@
-# llm.py (Corrected for async)
+# llm.py (Correctly enables OpenAI's JSON Mode)
 
 import httpx
 import json
 from .config import settings
 
-# This function must be async to be awaited
 async def call_llm(model: str, prompt: str, max_tokens: int = 2048) -> str:
     """
-    Makes an asynchronous request to the AI Pipe / OpenRouter proxy to get a response from an LLM.
+    Makes an asynchronous request to the AI Pipe / OpenRouter proxy to get a response from an LLM,
+    with JSON Mode enabled to constrain the output to valid JSON syntax.
     """
-    print("Calling LLM via AI Pipe proxy...")
+    print("Calling LLM via AI Pipe proxy with JSON Mode ENABLED...")
 
     token = settings.AIPIPE_TOKEN
     if not token:
@@ -30,12 +30,14 @@ async def call_llm(model: str, prompt: str, max_tokens: int = 2048) -> str:
         ],
         "max_tokens": max_tokens,
         "temperature": 0.0,
+        # This parameter constrains the model to generate a string that is a valid JSON object.
+        "response_format": {
+            "type": "json_object"
+        }
     }
 
     try:
-        # Use httpx.AsyncClient for async requests
         async with httpx.AsyncClient(timeout=60.0) as client:
-            # The client call itself must also be awaited
             response = await client.post(url, headers=headers, json=body)
 
         if response.status_code != 200:
@@ -45,7 +47,7 @@ async def call_llm(model: str, prompt: str, max_tokens: int = 2048) -> str:
 
         response_data = response.json()
         content = response_data["choices"][0]["message"]["content"]
-        print("LLM call successful, returning content.")
+        print("LLM call successful, returning a string constrained to JSON format.")
         return content.strip()
 
     except httpx.RequestError as e:
