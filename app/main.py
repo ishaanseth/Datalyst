@@ -31,7 +31,7 @@ async def analyze(questions: UploadFile = File(...), files: list[UploadFile] = F
             qtext = f.read()
 
         # Get plan from planner (LLM)
-        plan = plan_for_question(qtext, available)
+        plan = plan_for_question(qtext)
         if not isinstance(plan, list):
             raise HTTPException(status_code=500, detail="Planner returned invalid plan")
 
