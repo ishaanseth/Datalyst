@@ -1,6 +1,6 @@
 import json
 import logging
-from .settings import settings
+from .config import settings
 from .llm import call_llm
 
 def plan_for_question(question_text: str):
