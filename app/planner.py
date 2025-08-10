@@ -1,40 +1,23 @@
-# planner.py (Corrected and updated)
+# planner.py (Corrected with a smarter JSON fix)
 
 import json
 from .config import settings
 from .llm import call_llm
 
 async def plan_for_question(question_text: str, available_files: list[str]):
-    """
-    Generate an execution plan for the given question, ensuring only step types
-    supported by the executor are used.
-    """
     print("Planning for question...")
     print(f"Question text: {question_text}")
     print(f"Available files: {available_files}")
 
-    allowed_types = [
-        "fetch_url",
-        "read_file",
-        "extract_table",
-        "duckdb_query",
-        "run_python",
-        "plot",
-        "summarize",
-        "return"
-    ]
+    allowed_types = ["fetch_url", "read_file", "extract_table", "duckdb_query", "run_python", "plot", "summarize", "return"]
 
-    # --- THIS PROMPT IS NOW CORRECTED ---
-    # It contains two separate, clean examples: one for the overall plan and one for run_python.
     prompt = f"""
 You are a planning agent for a data analysis pipeline. Your task is to create a JSON plan to answer the user's question.
-
+You are a planning agent... (The rest of your prompt is fine, no need to paste it here again)
 The user has provided the following files: {json.dumps(available_files)}
 The user's question is:
 \"\"\"{question_text}\"\"\"
-
 Create a JSON list of steps to execute. Each step is an object with "id", "type", and "args".
-
 **Rules:**
 1.  **Allowed Step Types:** You can ONLY use the following step types: {json.dumps(allowed_types)}.
 2.  **File Access:**
@@ -44,7 +27,6 @@ Create a JSON list of steps to execute. Each step is an object with "id", "type"
 3.  **Step `id`s:** Must be unique, short, and in snake_case.
 4.  **`run_python` Code:** The `code` argument for a `run_python` step is a JSON string. Therefore, all backslashes (\\) and double quotes (") inside the Python code MUST be properly escaped (as \\\\ and \\").
 5.  **Final Answer:** The LAST step MUST be `type: "return"`. Its `from` argument must point to the `id` of the step that produces the final answer.
-
 **Example of a full plan:**
 [
   {{
@@ -68,7 +50,6 @@ Create a JSON list of steps to execute. Each step is an object with "id", "type"
     "args": {{"from": "query_films"}}
   }}
 ]
-
 **Example of a correctly escaped `run_python` step:**
 {{
   "id": "clean_data",
@@ -77,7 +58,6 @@ Create a JSON list of steps to execute. Each step is an object with "id", "type"
     "code": "import pandas as pd\\n\\ndf = pd.read_csv('input.csv')\\n# Replace values and save\\ndf['column'] = df['column'].str.replace('old', 'new')\\ndf.to_csv('output.csv', index=False)"
   }}
 }}
-
 Now, create a complete, valid JSON plan based on the user's question and available files.
 Respond ONLY with the raw JSON list of steps. Do not include any explanations or markdown.
 """
@@ -95,16 +75,20 @@ Respond ONLY with the raw JSON list of steps. Do not include any explanations or
             plan_str = plan_str.strip()[7:-3].strip()
         elif plan_str.strip().startswith("```"):
             plan_str = plan_str.strip()[3:-3].strip()
-
+        
         plan = json.loads(plan_str)
         print(f"Plan parsed successfully with {len(plan)} steps.")
     except json.JSONDecodeError as e:
         print(f"Initial JSON parsing failed: {e}. Attempting to fix and re-parse...")
+        # --- THIS IS THE NEW, SMARTER FIX ---
+        # It targets specific common LLM errors without corrupting the rest of the string.
         try:
-            fixed_plan_str = plan_str.replace('\\', '\\\\')
-            print("Retrying with fixed backslashes...")
+            # Fix 1: Remove trailing semicolons in dictionaries
+            fixed_plan_str = plan_str.replace('";,', '",').replace('};,', '},')
+            
+            print("Retrying with fixed semicolons...")
             plan = json.loads(fixed_plan_str)
-            print(f"Plan parsed successfully after fixing backslashes.")
+            print("Plan parsed successfully after fixing semicolons.")
         except Exception as inner_e:
             print(f"ERROR: Could not parse JSON even after attempting to fix it: {inner_e}")
             raise ValueError(f"Invalid plan JSON from LLM, and automatic fixing failed: {inner_e}")
