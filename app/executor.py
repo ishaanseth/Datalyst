@@ -56,22 +56,33 @@ def execute_steps(steps, workdir):
             df.to_csv(out, index=False)
             results[sid] = {"type":"csv","path":out}
         elif stype == "run_python":
-            code = args["code"]
-            decoded_code = codecs.decode(code, 'unicode_escape')
+            code_lines = args.get("code")
+            
+            # --- THIS IS THE NEW LOGIC ---
+            if not isinstance(code_lines, list):
+                raise TypeError(f"The 'code' argument for run_python must be a list of strings, but got {type(code_lines)}")
+            
+            # Join the lines of code into a single script
+            script_content = "\n".join(code_lines)
+            
             script_path = os.path.join(workdir, sid + ".py")
             with open(script_path, "w", encoding="utf-8") as f:
-                f.write(decoded_code)
+                f.write(script_content) # Write the combined script
+            
             try:
                 stdout, stderr, rc = run_shell(f"python {shlex.quote(script_path)}", cwd=workdir, timeout=timeout)
             except subprocess.TimeoutExpired:
                 raise TimeoutError(f"Step {sid} timed out")
+
             if rc != 0:
                 print(f"ERROR: Step {sid} (run_python) failed with return code {rc}.")
                 print(f"STDOUT:\n{stdout}")
                 print(f"STDERR:\n{stderr}")
                 raise RuntimeError(f"Execution of python script for step '{sid}' failed. See logs for details.")
+            
             print(f"Python script for step {sid} executed successfully.")
-            results[sid] = {"type":"text","value":stdout}
+            # The stdout of the script is its result
+            results[sid] = {"type":"text","value":stdout.strip()}
         
         # --- THIS IS THE COMPLETED FEATURE ---
         elif stype == "summarize":
