@@ -43,23 +43,22 @@ async def analyze(questions: UploadFile = File(...), files: list[UploadFile] = F
         results = execute_steps(plan, workdir)
 
         final = results.get("__final__")
+        output = [] # Default to an empty list
         if final and final["type"] == "list":
-            # The final result is now the pre-assembled list
             output = final["value"]
-        else:
-            # Fallback: return textual outputs of each step
-            arr = []
-            for s in plan:
-                sid = s["id"]
-                r = results.get(sid, {})
-                if r.get("type") == "image":
-                    arr.append(r.get("uri"))
-                elif r.get("type") == "csv":
-                    with open(r["path"], "r", encoding="utf-8") as f:
-                        arr.append(f.read())
-                else:
-                    arr.append(r.get("value", str(r)))
-            output = arr
+        
+        # --- FINAL POLISH: JSON UNWRAPPING ---
+        # If the final output is a list containing a single string that looks like JSON,
+        # parse that string to get the actual objects for the final response.
+        if isinstance(output, list) and len(output) == 1 and isinstance(output[0], str):
+            try:
+                # Try to parse the inner string
+                parsed_content = json.loads(output[0])
+                # If successful, this parsed content becomes the final output
+                output = parsed_content
+            except json.JSONDecodeError:
+                # If parsing fails, it wasn't a JSON string, so we leave it as is.
+                pass
 
         return JSONResponse(content=output)
     finally:
