@@ -13,3 +13,4 @@ lxml
 aiofiles
 python-multipart
 requests
+html5lib
