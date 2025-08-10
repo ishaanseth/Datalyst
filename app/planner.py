@@ -67,15 +67,16 @@ Create a JSON list of steps to execute. Each step is an object with "id", "type"
     "type": "return",
     "args": {{"from": "query_films"}}
   }}
-
-    {{
-      "id": "clean_data",
-      "type": "run_python",
-      "args": {{
-        "code": "import pandas as pd\\n\\ndf = pd.read_csv('input.csv')\\n# Replace values and save\\ndf['column'] = df['column'].str.replace('old', 'new')\\ndf.to_csv('output.csv', index=False)"
-      }}
-    }}
 ]
+
+**Example of a correctly escaped `run_python` step:**
+{{
+  "id": "clean_data",
+  "type": "run_python",
+  "args": {{
+    "code": "import pandas as pd\\n\\ndf = pd.read_csv('input.csv')\\n# Replace values and save\\ndf['column'] = df['column'].str.replace('old', 'new')\\ndf.to_csv('output.csv', index=False)"
+  }}
+}}
 
 Now, create a complete, valid JSON plan based on the user's question and available files.
 Respond ONLY with the raw JSON list of steps. Do not include any explanations or markdown.
