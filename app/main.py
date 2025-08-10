@@ -42,30 +42,10 @@ async def analyze(questions: UploadFile = File(...), files: list[UploadFile] = F
         # Execute plan
         results = execute_steps(plan, workdir)
 
-        # If planner declared a return step, use it
         final = results.get("__final__")
-        output = []
-        if final:
-            if final["type"] == "image":
-                answer = final.get("uri")
-                output = [answer]
-            elif final["type"] in ["csv", "text", "file"]:
-                path = final.get("path")
-                if path and os.path.exists(path):
-                    with open(path, "r", encoding="utf-8", errors="ignore") as f:
-                        answer = f.read()
-                else:
-                    answer = final.get("value", str(final))
-
-                try:
-                    # If the answer is a valid JSON string, parse it
-                    parsed_answer = json.loads(answer)
-                    output = parsed_answer if isinstance(parsed_answer, list) else [parsed_answer]
-                except (json.JSONDecodeError, TypeError):
-                    # Otherwise, treat as plain text
-                    output = [answer]
-            else:
-                output = [final.get("value", str(final))]
+        if final and final["type"] == "list":
+            # The final result is now the pre-assembled list
+            output = final["value"]
         else:
             # Fallback: return textual outputs of each step
             arr = []
