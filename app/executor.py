@@ -1,3 +1,4 @@
+# executor.py (Corrected)
 
 import subprocess, json, os, shlex, time, duckdb, pandas as pd
 from .utils import image_to_data_uri
@@ -18,6 +19,9 @@ def execute_steps(steps, workdir):
         stype = s.get("type")
         args = s.get("args", {})
         timeout = s.get("timeout", 30)
+        
+        print(f"--- EXECUTING STEP: {sid} ({stype}) ---")
+
         if stype == "fetch_url":
             import httpx
             url = args["url"]
@@ -45,10 +49,14 @@ def execute_steps(steps, workdir):
         elif stype == "duckdb_query":
             query = args["query"]
             con = duckdb.connect()
+            # We must set the working directory for DuckDB to find relative file paths
+            con.execute(f"SET FILE_SEARCH_PATH='{workdir}'")
             df = con.execute(query).df()
             out = os.path.join(workdir, args.get("save_as", sid + ".csv"))
             df.to_csv(out, index=False)
             results[sid] = {"type":"csv","path":out}
+        
+        # --- THIS IS THE CRITICAL FIX ---
         elif stype == "run_python":
             code = args["code"]
             script_path = os.path.join(workdir, sid + ".py")
@@ -58,7 +66,18 @@ def execute_steps(steps, workdir):
                 stdout, stderr, rc = run_shell(f"python {shlex.quote(script_path)}", cwd=workdir, timeout=timeout)
             except subprocess.TimeoutExpired:
                 raise TimeoutError(f"Step {sid} timed out")
+
+            # Check if the python script failed
+            if rc != 0:
+                print(f"ERROR: Step {sid} (run_python) failed with return code {rc}.")
+                print(f"STDOUT:\n{stdout}")
+                print(f"STDERR:\n{stderr}")
+                raise RuntimeError(f"Execution of python script for step '{sid}' failed. See logs for details.")
+            
+            print(f"Python script for step {sid} executed successfully.")
+            print(f"STDOUT:\n{stdout}")
             results[sid] = {"type":"process","stdout":stdout,"stderr":stderr,"rc":rc}
+        
         elif stype == "plot":
             df_ref = args["df_ref"]
             if df_ref not in results:
