@@ -1,14 +1,17 @@
-import json
-import requests
-from .config import settings
+# planner.py (Corrected and updated)
 
-def plan_for_question(question_text: str, available_files=None):
+import json
+from .config import settings
+from .llm import call_llm
+
+def plan_for_question(question_text: str, available_files: list[str]):
     """
-    Generate an execution plan for the given question using AIPipe API,
-    ensuring only step types supported by executor.py are used.
+    Generate an execution plan for the given question, ensuring only step types
+    supported by the executor are used.
     """
-    if not settings.AIPIPE_TOKEN:
-        raise ValueError("AIPIPE_TOKEN environment variable not set.")
+    print("Planning for question...")
+    print(f"Question text: {question_text}")
+    print(f"Available files: {available_files}")
 
     allowed_types = [
         "fetch_url",
@@ -22,76 +25,77 @@ def plan_for_question(question_text: str, available_files=None):
     ]
 
     prompt = f"""
-You are a planning agent for a data analysis pipeline.
+You are a planning agent for a data analysis pipeline. Your task is to create a JSON plan to answer the user's question.
 
-User has asked the following question and provided these files:
-Question:
+The user has provided the following files: {json.dumps(available_files)}
+The user's question is:
 \"\"\"{question_text}\"\"\"
 
-Files available:
-{available_files or []}
+Create a JSON list of steps to execute. Each step is an object with "id", "type", and "args".
 
-Create a JSON list of steps to execute.
-Each step must have:
-  - "id": short unique snake_case name
-  - "type": one of {allowed_types}
-  - "args": dictionary of parameters for that step
-  - Optional: "timeout" (default 30)
+**Rules:**
+1.  **Allowed Step Types:** You can ONLY use the following step types: {json.dumps(allowed_types)}.
+2.  **File Access:**
+    - To read a file provided by the user, use the `read_file` step with the "path" arg set to one of the available files.
+    - To use the output of a previous step, the `from` or `df_ref` argument MUST match the `id` of a preceding step.
+    - Do NOT invent filenames. All file inputs must come from an available file or a `save_as` from a previous step.
+3.  **Step `id`s:** Must be unique, short, and in snake_case.
+4.  **`run_python`:** Use this for any custom data processing. The code runs in a directory containing all saved files. It can read and write files.
+5.  **Final Answer:** The LAST step MUST be `type: "return"`. Its `from` argument must point to the `id` of the step that produces the final answer.
 
-**CRITICAL RULES:**
-1. Only use types in {allowed_types}.
-2. For Python code execution, use "run_python" (NOT "python").
-3. For SQL queries, use "duckdb_query".
-4. If returning output, include a "return" step with "from" pointing to a prior step's id.
-5. Ensure dependencies are produced before being used.
-6. **If a step writes an output file that will be used later, include `"save_as"` in "args" with the exact filename written.**
-7. Any later step must reference previous outputs using `"from": "<step_id>"`, not `"path"`.
-8. Do not hardcode file paths in later steps—always use `"from"` to chain outputs.
-9. Always ensure the filename in `"save_as"` matches exactly what the code writes to disk.
-10. Respond ONLY with a valid JSON list, no explanations.
-
-Example:
+Example Plan:
 [
   {{
-    "id": "read_wiki",
+    "id": "fetch_wiki_page",
     "type": "fetch_url",
-    "args": {{"url": "https://example.com", "save_as": "wiki.html"}}
+    "args": {{"url": "https://en.wikipedia.org/wiki/List_of_highest-grossing_films", "save_as": "wiki_films.html"}}
   }},
   {{
-    "id": "table",
+    "id": "extract_film_table",
     "type": "extract_table",
-    "args": {{"from": "read_wiki", "save_as": "table.csv"}}
+    "args": {{"from": "fetch_wiki_page", "save_as": "films.csv"}}
   }},
   {{
-    "id": "answer",
+    "id": "query_films",
+    "type": "duckdb_query",
+    "args": {{"query": "SELECT Title, \\"Worldwide gross\\" FROM \\"films.csv\\" LIMIT 10;", "save_as": "top_10_films.csv"}}
+  }},
+  {{
+    "id": "final_answer",
     "type": "return",
-    "args": {{"from": "table"}}
+    "args": {{"from": "query_films"}}
   }}
 ]
-    """
 
-    headers = {
-        "Authorization": f"Bearer {settings.AIPIPE_TOKEN}",
-        "Content-Type": "application/json"
-    }
-    payload = {
-        "model": settings.DEFAULT_MODEL,
-        "messages": [{"role": "user", "content": prompt}],
-        "max_tokens": 1500
-    }
-    resp = requests.post(f"{settings.AIPIPE_API_BASE}/chat/completions", headers=headers, json=payload)
-    resp.raise_for_status()
+Now, create a complete, valid JSON plan based on the user's question and available files.
+Respond ONLY with the raw JSON list of steps. Do not include any explanations or markdown.
+"""
 
-    data = resp.json()
-    plan_str = data["choices"][0]["message"]["content"]
+    plan_str = call_llm(
+        model=settings.DEFAULT_MODEL,
+        prompt=prompt,
+        max_tokens=2048
+    )
+
+    print(f"Raw plan string from LLM:\n{plan_str}")
 
     try:
+        # The LLM sometimes wraps the JSON in ```json ... ```, so we strip it.
+        if plan_str.strip().startswith("```json"):
+            plan_str = plan_str.strip()[7:-3].strip()
+        elif plan_str.strip().startswith("```"):
+            plan_str = plan_str.strip()[3:-3].strip()
+
         plan = json.loads(plan_str)
+        print(f"Plan parsed successfully with {len(plan)} steps.")
     except json.JSONDecodeError as e:
-        raise ValueError(f"Invalid plan JSON: {e}\nRaw output:\n{plan_str}")
+        print(f"ERROR: Invalid JSON from LLM: {e}")
+        raise ValueError(f"Invalid plan JSON: {e}")
 
     for step in plan:
-        if step.get("type") not in allowed_types:
-            raise ValueError(f"Unsupported step type in plan: {step.get('type')}")
+        stype = step.get("type")
+        if stype not in allowed_types:
+            raise ValueError(f"Unsupported step type in plan: {stype}")
 
+    print(f"Final parsed plan:\n{json.dumps(plan, indent=2)}")
     return plan
