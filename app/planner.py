@@ -24,6 +24,8 @@ async def plan_for_question(question_text: str, available_files: list[str]):
         "return"
     ]
 
+    # --- THIS PROMPT IS NOW CORRECTED ---
+    # It contains two separate, clean examples: one for the overall plan and one for run_python.
     prompt = f"""
 You are a planning agent for a data analysis pipeline. Your task is to create a JSON plan to answer the user's question.
 
@@ -36,14 +38,14 @@ Create a JSON list of steps to execute. Each step is an object with "id", "type"
 **Rules:**
 1.  **Allowed Step Types:** You can ONLY use the following step types: {json.dumps(allowed_types)}.
 2.  **File Access:**
-    - To read a file provided by the user, use the `read_file` step with the "path" arg set to one of the available files.
+    - To read a file provided by the user, use `read_file` with the "path" arg set to one of the available files.
     - To use the output of a previous step, the `from` or `df_ref` argument MUST match the `id` of a preceding step.
     - Do NOT invent filenames. All file inputs must come from an available file or a `save_as` from a previous step.
 3.  **Step `id`s:** Must be unique, short, and in snake_case.
-4.  **`run_python`:** Use this for any custom data processing. The code runs in a directory containing all saved files. It can read and write files.
+4.  **`run_python` Code:** The `code` argument for a `run_python` step is a JSON string. Therefore, all backslashes (\\) and double quotes (") inside the Python code MUST be properly escaped (as \\\\ and \\").
 5.  **Final Answer:** The LAST step MUST be `type: "return"`. Its `from` argument must point to the `id` of the step that produces the final answer.
 
-Example Plan:
+**Example of a full plan:**
 [
   {{
     "id": "fetch_wiki_page",
@@ -65,13 +67,21 @@ Example Plan:
     "type": "return",
     "args": {{"from": "query_films"}}
   }}
+
+    {{
+      "id": "clean_data",
+      "type": "run_python",
+      "args": {{
+        "code": "import pandas as pd\\n\\ndf = pd.read_csv('input.csv')\\n# Replace values and save\\ndf['column'] = df['column'].str.replace('old', 'new')\\ndf.to_csv('output.csv', index=False)"
+      }}
+    }}
 ]
 
 Now, create a complete, valid JSON plan based on the user's question and available files.
 Respond ONLY with the raw JSON list of steps. Do not include any explanations or markdown.
 """
 
-    plan_str = call_llm(
+    plan_str = await call_llm(
         model=settings.DEFAULT_MODEL,
         prompt=prompt,
         max_tokens=2048
@@ -80,7 +90,6 @@ Respond ONLY with the raw JSON list of steps. Do not include any explanations or
     print(f"Raw plan string from LLM:\n{plan_str}")
 
     try:
-        # The LLM sometimes wraps the JSON in ```json ... ```, so we strip it.
         if plan_str.strip().startswith("```json"):
             plan_str = plan_str.strip()[7:-3].strip()
         elif plan_str.strip().startswith("```"):
@@ -89,8 +98,15 @@ Respond ONLY with the raw JSON list of steps. Do not include any explanations or
         plan = json.loads(plan_str)
         print(f"Plan parsed successfully with {len(plan)} steps.")
     except json.JSONDecodeError as e:
-        print(f"ERROR: Invalid JSON from LLM: {e}")
-        raise ValueError(f"Invalid plan JSON: {e}")
+        print(f"Initial JSON parsing failed: {e}. Attempting to fix and re-parse...")
+        try:
+            fixed_plan_str = plan_str.replace('\\', '\\\\')
+            print("Retrying with fixed backslashes...")
+            plan = json.loads(fixed_plan_str)
+            print(f"Plan parsed successfully after fixing backslashes.")
+        except Exception as inner_e:
+            print(f"ERROR: Could not parse JSON even after attempting to fix it: {inner_e}")
+            raise ValueError(f"Invalid plan JSON from LLM, and automatic fixing failed: {inner_e}")
 
     for step in plan:
         stype = step.get("type")
