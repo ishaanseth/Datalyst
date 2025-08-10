@@ -1,4 +1,4 @@
-# planner.py (Uses JSON Mode and handles edge cases correctly)
+# planner.py (With a much clearer example for the LLM)
 
 import json
 from .config import settings
@@ -15,7 +15,7 @@ async def plan_for_question(question_text: str, available_files: list[str]):
 
     allowed_types = ["fetch_url", "read_file", "extract_table", "duckdb_query", "run_python", "plot", "summarize", "return"]
 
-    # This prompt is now extremely specific about the required JSON structure.
+    # This prompt has a new, much better example plan.
     prompt = f"""
 You are a planning agent for a data analysis pipeline.
 Your entire response MUST be a single JSON object.
@@ -70,43 +70,29 @@ Each step object must have keys "id", "type", and "args".
   ]
 }}
 
-The user has provided the following files: {json.dumps(available_files)}.
-
 Now, generate the complete JSON object response for the user's question:
 \"\"\"{question_text}\"\"\"
 """
 
     plan_str = await call_llm(
-        model=settings.DEFAULT_MODEL, # Using a capable model is important for following instructions
+        model=settings.DEFAULT_MODEL,
         prompt=prompt,
-        max_tokens=3072 # Increased tokens to reduce chance of cutoff
+        max_tokens=3072
     )
 
     print(f"Raw string from LLM (JSON Mode):\n{plan_str}")
 
     try:
-        # We expect a JSON object with a 'plan' key.
         data = json.loads(plan_str)
         plan = data["plan"]
-
         if not isinstance(plan, list):
             raise TypeError("The 'plan' key does not contain a list.")
-
         print(f"Plan parsed successfully with {len(plan)} steps.")
-
-    except json.JSONDecodeError as e:
-        # This handles the primary edge case: the model's output was cut off and is not complete JSON.
-        print(f"FATAL: LLM output was not complete JSON. Parser failed: {e}")
+    except (json.JSONDecodeError, KeyError, TypeError) as e:
+        print(f"FATAL: LLM output could not be parsed or was invalid. Error: {e}")
         print(f"--- BROKEN OUTPUT ---\n{plan_str}\n--------------------")
-        raise ValueError(f"LLM returned incomplete JSON, preventing execution: {e}")
+        raise ValueError(f"LLM returned unusable JSON: {e}")
 
-    except (KeyError, TypeError) as e:
-        # This handles the case where the JSON is valid, but doesn't match our expected structure.
-        print(f"FATAL: LLM JSON was valid, but didn't match the expected structure (e.g., missing 'plan' key). Error: {e}")
-        print(f"--- INVALID STRUCTURE ---\n{plan_str}\n--------------------")
-        raise ValueError(f"LLM returned JSON with an unexpected structure: {e}")
-
-    # Final validation of step types
     for step in plan:
         stype = step.get("type")
         if stype not in allowed_types:
