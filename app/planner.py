@@ -28,29 +28,31 @@ Each step object must have keys "id", "type", and "args".
 2.  **`run_python` Code:** For "run_python" steps, the "code" value is a JSON string. All backslashes (\\) and double quotes (") inside the Python code MUST be properly escaped (as \\\\ and \\").
 3.  **Final Answer:** The LAST step MUST be `type: "return"`. Its `from` argument must point to the `id` of the step that produces the final answer.
 
-**Example of a full plan:**
-[
-  {{
-    "id": "fetch_wiki_page",
-    "type": "fetch_url",
-    "args": {{"url": "https://en.wikipedia.org/wiki/List_of_highest-grossing_films", "save_as": "wiki_films.html"}}
-  }},
-  {{
-    "id": "extract_film_table",
-    "type": "extract_table",
-    "args": {{"from": "fetch_wiki_page", "save_as": "films.csv"}}
-  }},
-  {{
-    "id": "query_films",
-    "type": "duckdb_query",
-    "args": {{"query": "SELECT Title, \\"Worldwide gross\\" FROM \\"films.csv\\" LIMIT 10;", "save_as": "top_10_films.csv"}}
-  }},
-  {{
-    "id": "final_answer",
-    "type": "return",
-    "args": {{"from": "query_films"}}
-  }}
-]
+**Example Plan:**
+{{
+    "plan": [
+      {{
+        "id": "question_1_answer",
+        "type": "run_python",
+        "args": {{"code": "print(1)"}}
+      }},
+      {{
+        "id": "question_2_answer",
+        "type": "run_python",
+        "args": {{"code": "print('Titanic')"}}
+      }},
+      {{
+        "id": "question_3_plot",
+        "type": "plot",
+        "args": {{ ... }}
+      }},
+      {{
+        "id": "final_assembly",
+        "type": "return",
+        "args": {{"from": ["question_1_answer", "question_2_answer", "question_3_plot"]}}
+      }}
+    ]
+}}
 
 The user has provided the following files: {json.dumps(available_files)}.
 
