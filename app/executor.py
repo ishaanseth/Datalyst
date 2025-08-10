@@ -49,8 +49,11 @@ def execute_steps(steps, workdir):
         elif stype == "duckdb_query":
             query = args["query"]
             con = duckdb.connect()
-            # We must set the working directory for DuckDB to find relative file paths
+            # --- THIS IS THE FIX ---
+            # Set the working directory for DuckDB so it can find relative paths like 'films.csv'
             con.execute(f"SET FILE_SEARCH_PATH='{workdir}'")
+            
+            # Now execute the user's query
             df = con.execute(query).df()
             out = os.path.join(workdir, args.get("save_as", sid + ".csv"))
             df.to_csv(out, index=False)
