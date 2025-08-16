@@ -1,4 +1,4 @@
-# planner.py (Final Production Version)
+# planner.py (Definitive Hybrid Toolbox Version)
 
 import json
 from .config import settings
@@ -6,76 +6,51 @@ from .llm import call_llm
 
 async def plan_for_question(question_text: str, available_files: list[str]):
     print("Planning for question...")
-    print(f"Question text: {question_text}")
-    print(f"Available files: {available_files}")
+    
+    allowed_types = ["fetch_url", "extract_table", "run_python", "return"]
 
-    # We are simplifying the allowed types. The agent's power comes from run_python.
-    allowed_types = ["read_file", "run_python", "return"]
-
-    # This is the final, production-grade prompt.
     prompt = f"""
-You are a senior data analyst agent. Your task is to create a plan to answer the user's question using the provided files.
-The final output MUST be a single JSON object as specified in the user's question.
+You are a senior data analyst agent. Your job is to create a plan to answer the user's question.
+You must create a JSON object with a key "plan" containing a list of steps.
 
-**Your plan should have one single `run_python` step that performs all the necessary work and prints the final JSON object.**
+**STRATEGY:**
+1.  Use the `fetch_url` and `extract_table` tools to get data from the web and into a CSV file. These tools are simple and reliable.
+2.  Use a **single, final `run_python` step** to perform all the data analysis, calculations, and plotting.
+3.  This final Python script will read the CSV from the previous step, do everything required, build a final Python dictionary for the results, and print it as a JSON string.
 
-**CRITICAL RULES:**
-1.  Your entire response to this prompt MUST be a single JSON object with a top-level key named "plan".
-2.  The "plan" MUST be an array of steps.
-3.  The "code" argument for "run_python" steps MUST be a JSON array of strings, where each string is a single line of Python code.
-4.  The script you write MUST import all necessary libraries (e.g., pandas, networkx, matplotlib, base64, io).
-5.  To generate plots, create them in-memory using matplotlib, save to a BytesIO buffer, encode to a base64 string, and then add that string to the final results dictionary. DO NOT use the 'plot' tool.
-6.  The VERY LAST LINE of your `run_python` script MUST be `print(json.dumps(final_results_dict))` to output the final answer.
+**RULES:**
+1.  The `run_python` "code" argument MUST be a list of strings.
+2.  The last line of the `run_python` script MUST be `print(json.dumps(final_results_dict))`.
+3.  To create plots, import matplotlib, save the plot to an in-memory BytesIO buffer, and base64 encode it. Add the resulting data URI string to the final dictionary.
 
-**EXAMPLE PLAN FOR A COMPLEX TASK:**
-
+**EXAMPLE PLAN:**
 {{
   "plan": [
     {{
-      "id": "analyze_sales_data",
+      "id": "get_webpage",
+      "type": "fetch_url",
+      "args": {{"url": "https://en.wikipedia.org/wiki/List_of_highest-grossing_films", "save_as": "page.html"}}
+    }},
+    {{
+      "id": "get_table_from_page",
+      "type": "extract_table",
+      "args": {{"from": "get_webpage", "save_as": "films.csv"}}
+    }},
+    {{
+      "id": "analyze_and_prepare_results",
       "type": "run_python",
       "args": {{
         "code": [
-          "# Import all necessary libraries",
           "import pandas as pd",
-          "import matplotlib.pyplot as plt",
-          "import base64",
-          "from io import BytesIO",
           "import json",
-          "",
-          "# --- 1. Load and Prepare Data ---",
-          "df = pd.read_csv('sample-sales.csv')",
-          "df['date'] = pd.to_datetime(df['date'])",
+          "df = pd.read_csv('films.csv')",
           "final_results = {{}}",
-          "",
-          "# --- 2. Perform Calculations ---",
-          "final_results['total_sales'] = df['sales'].sum()",
-          "final_results['top_region'] = df.groupby('region')['sales'].sum().idxmax()",
-          "",
-          "# --- 3. Generate a Plot (Bar Chart) ---",
-          "plt.figure()",
-          "df.groupby('region')['sales'].sum().plot(kind='bar', color='blue')",
-          "plt.title('Total Sales by Region')",
-          "plt.ylabel('Total Sales')",
-          "buf = BytesIO()",
-          "plt.savefig(buf, format='png')",
-          "buf.seek(0)",
-          "img_base64 = base64.b64encode(buf.read()).decode('utf-8')",
-          "final_results['bar_chart'] = f'data:image/png;base64,{{img_base64}}'",
-          "plt.close()",
-          "",
-          "# --- 4. Generate another Plot (Line Chart) ---",
-          "plt.figure()",
-          "df.set_index('date')['sales'].cumsum().plot(kind='line', color='red')",
-          "plt.title('Cumulative Sales Over Time')",
-          "buf2 = BytesIO()",
-          "plt.savefig(buf2, format='png')",
-          "buf2.seek(0)",
-          "img_base64_2 = base64.b64encode(buf2.read()).decode('utf-8')",
-          "final_results['cumulative_sales_chart'] = f'data:image/png;base64,{{img_base64_2}}'",
-          "plt.close()",
-          "",
-          "# --- 5. Print the Final Assembled JSON Object ---",
+          "# Calculate total sales",
+          "df['SalesClean'] = df['Worldwide gross'].astype(str).replace('[\\\\$,]', '', regex=True).apply(pd.to_numeric, errors='coerce')",
+          "final_results['total_sales'] = df['SalesClean'].sum()",
+          "# Find top region",
+          "final_results['top_region'] = df.groupby('Peak')['SalesClean'].sum().idxmax()",
+          "# Add more calculations and plots here...",
           "print(json.dumps(final_results))"
         ]
       }}
@@ -83,22 +58,17 @@ The final output MUST be a single JSON object as specified in the user's questio
     {{
       "id": "final_response",
       "type": "return",
-      "args": {{"from": ["analyze_sales_data"]}}
+      "args": {{"from": ["analyze_and_prepare_results"]}}
     }}
   ]
 }}
 
-The user has provided the following files: {json.dumps(available_files)}.
-Now, generate the complete JSON plan to answer the user's question:
+The user has provided these files: {json.dumps(available_files)}.
+Generate the complete JSON plan to answer the user's question:
 \"\"\"{question_text}\"\"\"
 """
 
-    plan_str = await call_llm(
-        model=settings.DEFAULT_MODEL,
-        prompt=prompt,
-        max_tokens=4096 # Increased token limit for complex scripts
-    )
-
+    plan_str = await call_llm(model=settings.DEFAULT_MODEL, prompt=prompt, max_tokens=4096)
     print(f"Raw string from LLM (JSON Mode):\n{plan_str}")
 
     try:
@@ -107,15 +77,10 @@ Now, generate the complete JSON plan to answer the user's question:
         if not isinstance(plan, list): raise TypeError("'plan' key must be a list.")
         print(f"Plan parsed successfully with {len(plan)} steps.")
     except (json.JSONDecodeError, KeyError, TypeError) as e:
-        print(f"FATAL: LLM output could not be parsed or was invalid. Error: {e}")
-        print(f"--- BROKEN OUTPUT ---\n{plan_str}\n--------------------")
         raise ValueError(f"LLM returned unusable JSON: {e}")
 
     for step in plan:
         if step.get("type") not in allowed_types:
-            # We are removing the simple plot and summarize tools now
-            if step.get("type") in ["plot", "summarize", "fetch_url", "extract_table", "duckdb_query"]:
-                continue
             raise ValueError(f"Plan is invalid: unsupported step type '{step.get('type')}' found.")
 
     print(f"Final parsed plan:\n{json.dumps(plan, indent=2)}")
