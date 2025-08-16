@@ -8,12 +8,43 @@ from .config import settings
 
 app = FastAPI(title="TDS Data Analyst Agent")
 
-@app.post("/api/")
-async def analyze(questions: UploadFile = File(...), files: list[UploadFile] = File(None)):
+@app.post("/api")
+async def analyze(request: Request, questions: UploadFile = File(None), files: list[UploadFile] = File(None)):
     workdir = make_workdir(settings.WORK_DIR)
     print(f"=== /api/ called ===")
     print(f"Work directory created: {workdir}")
+
+    qtext = ""
+    available = []
+    
     try:
+        content_type = request.headers.get('content-type', '')
+
+        # Check if the request is multipart (like from your curl command)
+        if 'multipart/form-data' in content_type:
+            print("Processing multipart/form-data request.")
+            if not questions:
+                raise HTTPException(status_code=422, detail="Multipart request missing 'questions' file.")
+            
+            qtext_bytes = await questions.read()
+            qtext = qtext_bytes.decode('utf-8', errors='ignore')
+            available.append(questions.filename or "questions.txt")
+
+            if files:
+                for u in files:
+                    fpath = os.path.join(workdir, u.filename)
+                    with open(fpath, "wb") as f: f.write(await u.read())
+                    available.append(u.filename)
+
+        # Else, assume the request body is the raw question text (like from the evaluator)
+        else:
+            print("Processing raw-body request.")
+            qtext_bytes = await request.body()
+            qtext = qtext_bytes.decode('utf-8', errors='ignore')
+            available.append("questions.txt") # The evaluator provides the questions file
+            # In this mode, we assume the other necessary files (e.g., edges.csv) are also sent
+            # The promptfoo config will handle sending multiple files if needed
+        
         # Save questions
         qpath = os.path.join(workdir, "questions.txt")
         with open(qpath, "wb") as f:
