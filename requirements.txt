@@ -1,6 +1,5 @@
 
 fastapi
-uvicorn[standard]
 uvicorn
 httpx
 pydantic
@@ -15,3 +14,5 @@ aiofiles
 python-multipart
 requests
 html5lib
+scipy
+networkx
