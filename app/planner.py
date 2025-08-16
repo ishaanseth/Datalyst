@@ -46,7 +46,7 @@ You must create a JSON object with a key "plan" containing a list of steps.
           "df = pd.read_csv('films.csv')",
           "final_results = {{}}",
           "# Calculate total sales",
-          "df['SalesClean'] = df['Worldwide gross'].astype(str).replace('[\\\\$,]', '', regex=True).apply(pd.to_numeric, errors='coerce')",
+          "df['SalesClean'] = pd.to_numeric(df['Worldwide gross'].astype(str).str.replace(r'[\\\\$,]', '', regex=True), errors='coerce')",
           "final_results['total_sales'] = df['SalesClean'].sum()",
           "# Find top region",
           "final_results['top_region'] = df.groupby('Peak')['SalesClean'].sum().idxmax()",
