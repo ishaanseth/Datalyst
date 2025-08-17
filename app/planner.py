@@ -31,19 +31,23 @@ Create a JSON object with a key "plan". The plan must contain a single `run_pyth
 
 **EXAMPLE of a perfect `run_python` step:**
 {{
-  "id": "analyze_and_visualize",
-  "type": "run_python",
-  "args": {{
-    "code": [
-      "import pandas as pd",
-      "import json",
-      "final_results = {{}}",
-      "df = pd.read_csv('sample-sales.csv')",
-      "final_results['total_sales'] = df['sales'].sum()",
-      "final_results['top_region'] = df.groupby('region')['sales'].sum().idxmax()",
-      "print(json.dumps(final_results))"
+    "plan": = [
+        {{
+          "id": "analyze_and_visualize",
+          "type": "run_python",
+          "args": {{
+            "code": [
+              "import pandas as pd",
+              "import json",
+              "final_results = {{}}",
+              "df = pd.read_csv('sample-sales.csv')",
+              "final_results['total_sales'] = df['sales'].sum()",
+              "final_results['top_region'] = df.groupby('region')['sales'].sum().idxmax()",
+              "print(json.dumps(final_results))"
+            ]
+          }}
+        }}
     ]
-  }}
 }}
 
 Now, generate the complete JSON plan with a single `run_python` step to solve the user's question.
