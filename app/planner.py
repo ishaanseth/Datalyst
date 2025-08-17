@@ -29,7 +29,7 @@ Create a JSON object with a key "plan". The plan must contain a single `run_pyth
 4.  Store all final answers (both numbers and base64-encoded image URIs) in a single Python dictionary.
 5.  **The VERY LAST LINE of your script MUST be `print(json.dumps(final_results_dict))`**. This is the only way to return the answer.
 
-**EXAMPLE of a perfect `run_python` step:**
+**EXAMPLE of a plan with the perfect `run_python` step:**
 {{
     "plan": = [
         {{
