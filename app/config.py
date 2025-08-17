@@ -7,7 +7,7 @@ AIPIPE_TOKEN = os.getenv("AIPIPE_TOKEN")
 AIPIPE_API_BASE = "https://aipipe.org/openrouter/v1"
 
 # Default model
-DEFAULT_MODEL = "openai/gpt-4.1-nano"
+DEFAULT_MODEL = "openai/gpt-5-nano"
 
 class Settings:
     def __init__(self):
