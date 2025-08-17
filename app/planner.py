@@ -7,93 +7,46 @@ from .llm import call_llm
 async def plan_for_question(question_text: str, available_files: list[str]):
     print("Planning for question...")
     
-    # We only need two powerful tools. This simplifies the LLM's choices.
     allowed_types = ["run_python", "return"]
 
-    # This is the final, master prompt that teaches the agent how to solve the hardest problem.
+    # This is the final, master prompt. It is simpler and more direct.
     prompt = f"""
-You are a senior data analyst agent. Your job is to create a plan to answer the user's question.
-You must create a JSON object with a key "plan" containing a list of steps.
+You are a senior data analyst agent. Your job is to create a plan to answer the user's question by writing a single Python script.
 
-**STRATEGY:**
-The user has provided the following files: {json.dumps(available_files)}.
-Your plan should consist of a SINGLE `run_python` step that reads these files, performs all analysis, generates all plots, assembles the results into a single dictionary, and prints that dictionary as a JSON string.
+**User's Question:**
+\"\"\"{question_text}\"\"\"
 
-**CRITICAL RULES:**
-1.  Your Python code can access the provided files directly by name (e.g., `pd.read_csv('edges.csv')`).
-2.  The "code" argument for the `run_python` step MUST be a JSON array of strings.
-3.  The Python script MUST import all necessary libraries (pandas, networkx, matplotlib, base64, io, json).
-4.  To create plots, generate them in-memory, save to a BytesIO buffer, encode to a base64 string, and add the resulting data URI string to the final dictionary.
-5.  The VERY LAST LINE of your `run_python` script MUST be `print(json.dumps(final_results_dict))`.
+**Available Files:**
+{json.dumps(available_files)}
 
-**EXAMPLE PLAN for a Network Analysis Task:**
+**Your Task:**
+Create a JSON object with a key "plan". The plan must contain a single `run_python` step that does all the work.
 
+**CRITICAL INSTRUCTIONS for the `run_python` script:**
+1.  Read the necessary files from the `Available Files` list (e.g., `pd.read_csv('edges.csv')`).
+2.  Import all required libraries (`pandas`, `networkx`, `matplotlib`, `base64`, `io`, `json`).
+3.  Perform all calculations and generate all plots as requested.
+4.  Store all final answers (both numbers and base64-encoded image URIs) in a single Python dictionary.
+5.  **The VERY LAST LINE of your script MUST be `print(json.dumps(final_results_dict))`**. This is the only way to return the answer.
+
+**EXAMPLE of a perfect `run_python` step:**
 {{
-  "plan": [
-    {{
-      "id": "analyze_network_and_visualize",
-      "type": "run_python",
-      "args": {{
-        "code": [
-          "import pandas as pd",
-          "import networkx as nx",
-          "import json",
-          "import matplotlib.pyplot as plt",
-          "import base64",
-          "from io import BytesIO",
-          "",
-          "df = pd.read_csv('edges.csv')",
-          "G = nx.from_pandas_edgelist(df, 'source', 'target')",
-          "final_results = {{}}",
-          "",
-          "# 1. Calculations",
-          "final_results['edge_count'] = G.number_of_edges()",
-          "degrees = dict(G.degree())",
-          "final_results['highest_degree_node'] = max(degrees, key=degrees.get)",
-          "node_count = G.number_of_nodes()",
-          "final_results['average_degree'] = sum(degrees.values()) / node_count if node_count > 0 else 0",
-          "final_results['density'] = nx.density(G)",
-          "try:",
-          "    final_results['shortest_path_alice_eve'] = nx.shortest_path_length(G, source='Alice', target='Eve')",
-          "except nx.NetworkXNoPath:",
-          "    final_results['shortest_path_alice_eve'] = None",
-          "",
-          "# 2. Network Graph PNG",
-          "plt.figure(figsize=(8, 6))",
-          "nx.draw(G, with_labels=True, node_color='lightblue', edge_color='gray')",
-          "buf = BytesIO()",
-          "plt.savefig(buf, format='png')",
-          "plt.close()",
-          "buf.seek(0)",
-          "final_results['network_graph'] = f'data:image/png;base64,{{base64.b64encode(buf.read()).decode('utf-8')}}'",
-          "",
-          "# 3. Degree Histogram PNG",
-          "plt.figure(figsize=(8, 6))",
-          "plt.hist(list(degrees.values()), bins=range(1, len(degrees)+2), color='green')",
-          "plt.title('Degree Distribution')",
-          "plt.xlabel('Degree')",
-          "plt.ylabel('Frequency')",
-          "buf = BytesIO()",
-          "plt.savefig(buf, format='png')",
-          "plt.close()",
-          "buf.seek(0)",
-          "final_results['degree_histogram'] = f'data:image/png;base64,{{base64.b64encode(buf.read()).decode('utf-8')}}'",
-          "",
-          "# 4. Final Output",
-          "print(json.dumps(final_results))"
-        ]
-      }}
-    }},
-    {{
-      "id": "final_response",
-      "type": "return",
-      "args": {{"from": ["analyze_network_and_visualize"]}}
-    }}
-  ]
+  "id": "analyze_and_visualize",
+  "type": "run_python",
+  "args": {{
+    "code": [
+      "import pandas as pd",
+      "import json",
+      "final_results = {{}}",
+      "df = pd.read_csv('sample-sales.csv')",
+      "final_results['total_sales'] = df['sales'].sum()",
+      "final_results['top_region'] = df.groupby('region')['sales'].sum().idxmax()",
+      "print(json.dumps(final_results))"
+    ]
+  }}
 }}
 
-Now, generate the complete JSON plan to answer the user's question:
-\"\"\"{question_text}\"\"\"
+Now, generate the complete JSON plan with a single `run_python` step to solve the user's question.
 """
 
     plan_str = await call_llm(model=settings.DEFAULT_MODEL, prompt=prompt, max_tokens=4096)
