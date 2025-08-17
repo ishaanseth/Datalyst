@@ -7,13 +7,13 @@ AIPIPE_TOKEN = os.getenv("AIPIPE_TOKEN")
 AIPIPE_API_BASE = "https://aipipe.org/openrouter/v1"
 
 # Default model
-DEFAULT_MODEL = "openai/gpt-5"
+DEFAULT_MODEL = "openai/gpt-5-chat"
 
 class Settings:
     def __init__(self):
         self.AIPIPE_TOKEN = os.getenv("AIPIPE_TOKEN")
         self.AIPIPE_API_BASE = "https://aipipe.org/openrouter/v1"
-        self.DEFAULT_MODEL = "openai/gpt-5"
+        self.DEFAULT_MODEL = "openai/gpt-5-chat"
 
         # Runtime settings
         self.WORK_DIR = os.getenv("WORK_DIR", "/tmp")
