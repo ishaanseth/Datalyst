@@ -7,25 +7,27 @@ from .llm import call_llm
 async def plan_for_question(question_text: str, available_files: list[str]):
     print("Planning for question...")
     
-    # We only need two powerful tools now.
+    # We only need two powerful tools. This simplifies the LLM's choices.
     allowed_types = ["run_python", "return"]
 
-    # This is the final, master prompt that teaches the agent how to think.
+    # This is the final, master prompt that teaches the agent how to solve the hardest problem.
     prompt = f"""
 You are a senior data analyst agent. Your job is to create a plan to answer the user's question.
 You must create a JSON object with a key "plan" containing a list of steps.
 
 **STRATEGY:**
-Your primary tool is `run_python`. The user will provide files. Your plan should consist of a SINGLE `run_python` step that reads the provided files, performs all necessary analysis, generates all plots, assembles the results into a single dictionary, and prints that dictionary as a JSON string.
+The user has provided the following files: {json.dumps(available_files)}.
+Your plan should consist of a SINGLE `run_python` step that reads these files, performs all analysis, generates all plots, assembles the results into a single dictionary, and prints that dictionary as a JSON string.
 
 **CRITICAL RULES:**
-1.  **The user has provided the following files:** {json.dumps(available_files)}. Your Python code can access these files directly by name (e.g., `pd.read_csv('edges.csv')`). Do NOT use `fetch_url` or `extract_table` for files that are already provided.
-2.  The `run_python` "code" argument MUST be a list of strings.
+1.  Your Python code can access the provided files directly by name (e.g., `pd.read_csv('edges.csv')`).
+2.  The "code" argument for the `run_python` step MUST be a JSON array of strings.
 3.  The Python script MUST import all necessary libraries (pandas, networkx, matplotlib, base64, io, json).
 4.  To create plots, generate them in-memory, save to a BytesIO buffer, encode to a base64 string, and add the resulting data URI string to the final dictionary.
 5.  The VERY LAST LINE of your `run_python` script MUST be `print(json.dumps(final_results_dict))`.
 
-**EXAMPLE PLAN for the Network Analysis Task:**
+**EXAMPLE PLAN for a Network Analysis Task:**
+
 {{
   "plan": [
     {{
@@ -67,7 +69,7 @@ Your primary tool is `run_python`. The user will provide files. Your plan should
           "",
           "# 3. Degree Histogram PNG",
           "plt.figure(figsize=(8, 6))",
-          "plt.hist(list(degrees.values()), bins=range(1, len(degrees)+1), color='green')",
+          "plt.hist(list(degrees.values()), bins=range(1, len(degrees)+2), color='green')",
           "plt.title('Degree Distribution')",
           "plt.xlabel('Degree')",
           "plt.ylabel('Frequency')",
@@ -100,12 +102,11 @@ Now, generate the complete JSON plan to answer the user's question:
     try:
         data = json.loads(plan_str)
         plan = data["plan"]
-        if not isinstance(plan, list): raise TypeError("'plan' key is not a list.")
+        if not isinstance(plan, list): raise TypeError("'plan' key must be a list.")
         print(f"Plan parsed successfully with {len(plan)} steps.")
     except (json.JSONDecodeError, KeyError, TypeError) as e:
         raise ValueError(f"LLM returned unusable JSON: {e}")
 
-    # Simplified validation since we mostly expect run_python
     for step in plan:
         if step.get("type") not in allowed_types:
             raise ValueError(f"Plan is invalid: unsupported step type '{step.get('type')}' found.")
