@@ -27,7 +27,8 @@ Create a JSON object with a key "plan". The plan must contain a SINGLE `run_pyth
 2.  Import all required libraries (`pandas`, `networkx`, `matplotlib`, `base64`, `io`, `json`).
 3.  Perform ALL calculations and generate ALL plots as requested by the user.
 4.  Store all final answers (numbers, strings, and base64 image URIs) in a single Python dictionary.
-5.  **The VERY LAST LINE of your script MUST be `print(json.dumps(final_results_dict))`**. This is the only way to return the answer.
+5.  **Type Casting:** All numeric results from pandas/numpy (like `sum()`, `median()`, `corr()`) MUST be converted to standard Python types before being added to the final dictionary. Use `int()` for integers and `float()` for decimals.
+6.  **The VERY LAST LINE of your script MUST be `print(json.dumps(final_results_dict))`**. This is the only way to return the answer.
 
 **Example Plan for a Generic Data Task:**
 {{
