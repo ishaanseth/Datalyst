@@ -13,7 +13,7 @@ class Settings:
     def __init__(self):
         self.AIPIPE_TOKEN = os.getenv("AIPIPE_TOKEN")
         self.AIPIPE_API_BASE = "https://aipipe.org/openrouter/v1"
-        self.DEFAULT_MODEL = "openai/gpt-4.1-nano"
+        self.DEFAULT_MODEL = "openai/gpt-5-nano"
 
         # Runtime settings
         self.WORK_DIR = os.getenv("WORK_DIR", "/tmp")
