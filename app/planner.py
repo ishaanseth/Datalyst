@@ -7,61 +7,53 @@ from .llm import call_llm
 async def plan_for_question(question_text: str, available_files: list[str]):
     print("Planning for question...")
     
-    # Restore the simple, reliable tools to the agent's toolbox
-    allowed_types = ["fetch_url", "extract_table", "run_python", "return"]
+    # The agent now only has one tool: the power to write and run Python.
+    allowed_types = ["run_python"]
 
-    # This is the master prompt that teaches the hybrid strategy.
     prompt = f"""
-You are a senior data analyst agent. Your job is to create a plan to answer the user's question.
-You must create a JSON object with a key "plan" containing a list of steps.
+You are a senior data analyst agent. Your job is to answer the user's question by writing a single Python script.
 
-**STRATEGY:**
-- If the question requires data from a URL, use `fetch_url` and `extract_table` to get the data into a CSV file first.
-- If the question requires analyzing a file that is ALREADY provided, you can read it directly in your Python script.
-- Use a single `run_python` step to perform all the final data analysis, calculations, and plotting.
+**User's Question:**
+\"\"\"{question_text}\"\"\"
 
-**CRITICAL RULES:**
-1.  **The user has provided the following files:** {json.dumps(available_files)}. Your Python code can access these files directly by name.
-2.  The "code" argument for `run_python` steps MUST be a JSON array of strings.
-3.  The Python script you write MUST import all necessary libraries.
-4.  To create plots, generate them in-memory, save to a BytesIO buffer, encode to a base64 string, and add the resulting data URI string to the final dictionary.
-5.  The VERY LAST LINE of your `run_python` script MUST be `print(json.dumps(final_results_dict))`.
+**Available Files:**
+{json.dumps(available_files)}
 
-**EXAMPLE 1: Web Scraping and Analysis**
-{{
-  "plan": [
-    {{ "id": "get_webpage", "type": "fetch_url", "args": {{"url": "https://en.wikipedia.org/wiki/...", "save_as": "page.html"}} }},
-    {{ "id": "get_table", "type": "extract_table", "args": {{"from": "get_webpage", "save_as": "data.csv"}} }},
-    {{ "id": "analyze", "type": "run_python", "args": {{ "code": ["import pandas as pd", "import json", "df = pd.read_csv('data.csv')", "results = {{}}", "results['total_rows'] = len(df)", "print(json.dumps(results))"] }} }},
-    {{ "id": "final_return", "type": "return", "args": {{"from": ["analyze"]}} }}
-  ]
-}}
+**Your Task:**
+Create a JSON object with a key "plan". The plan must contain a SINGLE `run_python` step that does all the work.
 
-**EXAMPLE 2: Analysis of a Provided File (`edges.csv`)**
+**CRITICAL INSTRUCTIONS for the `run_python` script:**
+1.  Read the necessary files from the `Available Files` list (e.g., `pd.read_csv('sample-sales.csv')`).
+2.  Import all required libraries (`pandas`, `networkx`, `matplotlib`, `base64`, `io`, `json`).
+3.  Perform ALL calculations and generate ALL plots as requested by the user.
+4.  Store all final answers (numbers, strings, and base64 image URIs) in a single Python dictionary.
+5.  **The VERY LAST LINE of your script MUST be `print(json.dumps(final_results_dict))`**. This is the only way to return the answer.
+
+**Example Plan for a Generic Data Task:**
 {{
   "plan": [
     {{
-      "id": "analyze_network",
+      "id": "analyze_data_and_create_output",
       "type": "run_python",
       "args": {{
         "code": [
           "import pandas as pd",
-          "import networkx as nx",
           "import json",
-          "df = pd.read_csv('edges.csv')",
-          "G = nx.from_pandas_edgelist(df, 'source', 'target')",
-          "results = {{}}",
-          "results['edge_count'] = G.number_of_edges()",
-          "print(json.dumps(results))"
+          "final_results = {{}}",
+          "# Always read the specific file mentioned in the question",
+          "df = pd.read_csv('data.csv')", 
+          "# Perform some calculations",
+          "final_results['total_rows'] = len(df)",
+          "final_results['first_value'] = df.iloc[0, 0]",
+          "# The last line MUST print the dictionary",
+          "print(json.dumps(final_results))"
         ]
       }}
-    }},
-    {{ "id": "final_return", "type": "return", "args": {{"from": ["analyze_network"]}} }}
+    }}
   ]
 }}
 
-Now, generate the complete JSON plan to answer the user's question:
-\"\"\"{question_text}\"\"\"
+Now, generate the complete JSON plan to solve the user's question.
 """
 
     plan_str = await call_llm(model=settings.DEFAULT_MODEL, prompt=prompt, max_tokens=4096)
