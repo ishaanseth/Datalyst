@@ -7,7 +7,7 @@ from .llm import call_llm
 async def plan_for_question(question_text: str, available_files: list[str]):
     print("Planning for question...")
     
-    allowed_types = ["fetch_url", "extract_table", "run_python", "return"]
+    allowed_types = ["run_python", "return"]
 
     # This prompt contains a corrected, robust, and professional-grade example.
     prompt = f"""
