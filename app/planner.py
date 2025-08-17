@@ -1,4 +1,4 @@
-# planner.py (Definitive Hybrid Toolbox Version)
+# planner.py (Definitive Production-Grade Version)
 
 import json
 from .config import settings
@@ -9,12 +9,13 @@ async def plan_for_question(question_text: str, available_files: list[str]):
     
     allowed_types = ["fetch_url", "extract_table", "run_python", "return"]
 
+    # This prompt contains a corrected, robust, and professional-grade example.
     prompt = f"""
 You are a senior data analyst agent. Your job is to create a plan to answer the user's question.
 You must create a JSON object with a key "plan" containing a list of steps.
 
 **STRATEGY:**
-1.  Use the `fetch_url` and `extract_table` tools to get data from the web and into a CSV file. These tools are simple and reliable.
+1.  Use the `fetch_url` and `extract_table` tools to reliably get data from the web into a CSV file.
 2.  Use a **single, final `run_python` step** to perform all the data analysis, calculations, and plotting.
 3.  This final Python script will read the CSV from the previous step, do everything required, build a final Python dictionary for the results, and print it as a JSON string.
 
@@ -45,13 +46,19 @@ You must create a JSON object with a key "plan" containing a list of steps.
           "import json",
           "df = pd.read_csv('films.csv')",
           "final_results = {{}}",
-          "# Calculate total sales",
+          "",
+          "# --- DATA CLEANING (IMPORTANT!) ---",
+          "# Use .str.replace() for string operations and pd.to_numeric for safe conversion.",
           "df['SalesClean'] = pd.to_numeric(df['Worldwide gross'].astype(str).str.replace(r'[\\\\$,]', '', regex=True), errors='coerce')",
-          "final_results['total_sales'] = df['SalesClean'].sum()",
-          "# Find top region",
-          "final_results['top_region'] = df.groupby('Peak')['SalesClean'].sum().idxmax()",
-          "# Add more calculations and plots here...",
-          "print(json.dumps(final_results))"
+          "df.dropna(subset=['SalesClean'], inplace=True)",
+          "",
+          "# --- CALCULATIONS ---",
+          "final_results['total_gross'] = df['SalesClean'].sum()",
+          "top_film_row = df.loc[df['SalesClean'].idxmax()]",
+          "final_results['top_film_title'] = top_film_row['Title']",
+          "",
+          "# --- FINAL OUTPUT ---",
+          "print(json.dumps(final_results, indent=2))"
         ]
       }}
     }},
