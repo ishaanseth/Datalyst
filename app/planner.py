@@ -10,25 +10,42 @@ async def plan_for_question(question_text: str, available_files: list[str]):
     # The agent now only has one tool: the power to write and run Python.
     allowed_types = ["run_python"]
 
-    prompt = f"""
+    available_files_json = json.dumps(available_files)
+    
+    prompt = f'''
 You are a senior data analyst agent. Your job is to answer the user's question by writing a single Python script.
 
 **User's Question:**
-\"\"\"{question_text}\"\"\"
+"""{question_text}"""
 
 **Available Files:**
-{json.dumps(available_files)}
+{available_files_json}
 
 **Your Task:**
 Create a JSON object with a key "plan". The plan must contain a SINGLE `run_python` step that does all the work.
 
 **CRITICAL INSTRUCTIONS for the `run_python` script:**
-1.  Read the necessary files from the `Available Files` list (e.g., `pd.read_csv('sample-sales.csv')`).
-2.  Import all required libraries (`pandas`, `networkx`, `matplotlib`, `base64`, `io`, `json`).
-3.  Perform ALL calculations and generate ALL plots as requested by the user.
-4.  Store all final answers (numbers, strings, and base64 image URIs) in a single Python dictionary.
-5.  **Type Casting:** All numeric results from pandas/numpy (like `sum()`, `median()`, `corr()`) MUST be converted to standard Python types before being added to the final dictionary. Use `int()` for integers and `float()` for decimals.
-6.  **The VERY LAST LINE of your script MUST be `print(json.dumps(final_results_dict))`**. This is the only way to return the answer.
+1.  **Wrap ALL code in try-except-finally** to ensure errors are caught and reported cleanly. Always print JSON in the finally block.
+2.  Read the necessary files from the `Available Files` list (e.g., `pd.read_csv('sample-sales.csv')`).
+3.  Import all required libraries (`pandas`, `networkx`, `matplotlib`, `base64`, `io`, `json`, `requests`).
+4.  Perform ALL calculations and generate ALL plots as requested by the user.
+5.  Store all final answers (numbers, strings, and base64 image URIs) in a single Python dictionary.
+6.  If your task involves scraping a website, always use browser-style headers with `requests`, for example:
+    `headers = {{'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}}`
+    and pass them via `requests.get(url, headers=headers, timeout=30)`. Use BeautifulSoup or pd.read_html to **PARSE the HTML and extract data from tables**—not lxml directly. Always extract structured data (lists, dicts) from the parsed HTML, never return raw HTML.
+7.  **Type Casting:** All numeric results from pandas/numpy (like `sum()`, `median()`, `corr()`) MUST be converted to standard Python types before being added to the final dictionary. Use `int()` for integers and `float()` for decimals.
+8.  **REQUIRED STRUCTURE:** Wrap your entire script logic in a try-except-finally block:
+    ```python
+    final_results_dict = {{}}
+    try:
+        # All your logic here
+        final_results_dict['result'] = ...
+    except Exception as e:
+        final_results_dict['error'] = str(e)
+    finally:
+        print(json.dumps(final_results_dict))
+    ```
+    This ensures the script ALWAYS outputs valid JSON, even on failure.
 
 **Example Plan for a Generic Data Task:**
 {{
@@ -41,13 +58,56 @@ Create a JSON object with a key "plan". The plan must contain a SINGLE `run_pyth
           "import pandas as pd",
           "import json",
           "final_results = {{}}",
-          "# Always read the specific file mentioned in the question",
-          "df = pd.read_csv('data.csv')", 
-          "# Perform some calculations",
-          "final_results['total_rows'] = len(df)",
-          "final_results['first_value'] = df.iloc[0, 0]",
-          "# The last line MUST print the dictionary",
-          "print(json.dumps(final_results))"
+          "try:",
+          "    df = pd.read_csv('data.csv')",
+          "    final_results['total_rows'] = int(len(df))",
+          "    final_results['first_value'] = str(df.iloc[0, 0])",
+          "except Exception as e:",
+          "    final_results['error'] = str(e)",
+          "finally:",
+          "    print(json.dumps(final_results))"
+        ]
+      }}
+    }}
+  ]
+}}
+
+**SCRAPING EXAMPLE:** If the task involves scraping a table from a webpage:
+{{
+  "plan": [
+    {{
+      "id": "scrape_film_data",
+      "type": "run_python",
+      "args": {{
+        "code": [
+          "import requests",
+          "from bs4 import BeautifulSoup",
+          "import json",
+          "final_results = {{}}",
+          "try:",
+          "    url = 'https://en.wikipedia.org/wiki/List_of_highest-grossing_films'",
+          "    headers = {{'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}}",
+          "    response = requests.get(url, headers=headers, timeout=30)",
+          "    response.raise_for_status()",
+          "    soup = BeautifulSoup(response.text, 'html.parser')",
+          "    table = soup.find('table', {{'class': 'wikitable'}})  # Find Wikipedia table",
+          "    if not table:",
+          "        raise ValueError('Table not found')",
+          "    rows = []",
+          "    for tr in table.find_all('tr')[1:]:  # Skip header row",
+          "        cells = tr.find_all(['td', 'th'])",
+          "        if len(cells) >= 3:",
+          "            title = cells[2].get_text(strip=True)",
+          "            gross = cells[3].get_text(strip=True)",
+          "            year = cells[4].get_text(strip=True)",
+          "            rows.append({{'title': title, 'worldwide_gross': gross, 'year': year}})",
+          "            if len(rows) >= 50:  # Limit to top 50 films",
+          "                break",
+          "    final_results['highest_grossing_films'] = rows",
+          "except Exception as e:",
+          "    final_results['error'] = str(e)",
+          "finally:",
+          "    print(json.dumps(final_results))"
         ]
       }}
     }}
@@ -55,7 +115,7 @@ Create a JSON object with a key "plan". The plan must contain a SINGLE `run_pyth
 }}
 
 Now, generate the complete JSON plan to solve the user's question.
-"""
+'''
 
     plan_str = await call_llm(model=settings.DEFAULT_MODEL, prompt=prompt, max_tokens=4096)
     print(f"Raw string from LLM (JSON Mode):\n{plan_str}")
