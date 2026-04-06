@@ -1,10 +1,10 @@
 # executor.py (Final Definitive Version)
 
-import subprocess, json, os, shlex, time
+import subprocess, json, os, time, sys
 from .config import settings
 
 def run_shell(cmd, cwd=None, timeout=30):
-    proc = subprocess.run(cmd, cwd=cwd, shell=True, capture_output=True, text=True, timeout=timeout)
+    proc = subprocess.run(cmd, cwd=cwd, shell=False, capture_output=True, text=True, timeout=timeout)
     return proc.stdout, proc.stderr, proc.returncode
 
 def execute_steps(steps, workdir):
@@ -26,7 +26,7 @@ def execute_steps(steps, workdir):
             with open(script_path, "w", encoding="utf-8") as f:
                 f.write(script_content)
             
-            stdout, stderr, rc = run_shell(f"python {shlex.quote(script_path)}", cwd=workdir, timeout=settings.MAX_JOB_SECONDS - 10)
+            stdout, stderr, rc = run_shell([sys.executable, script_path], cwd=workdir, timeout=settings.MAX_JOB_SECONDS - 10)
 
             if rc != 0:
                 print(f"ERROR: Step {sid} failed. STDERR:\n{stderr}")
