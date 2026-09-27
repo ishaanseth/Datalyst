@@ -2,8 +2,6 @@
 
 Datalyst is a powerful, AI-driven API that automates the entire data analysis workflow. Simply provide a question and your data files, and Datalyst's AI agent will generate a step-by-step plan, execute Python code, and return the precise analysis, visualizations, and answers you need—all in a single API call.
 
-**This project is live and accessible at:** `https://datalyst-production.up.railway.app/api`
-
 ## Core Features
 
 *   **🧠 Dynamic Planning:** Datalyst uses a sophisticated AI planner to interpret your questions and create a custom, multi-step strategy for solving them.
@@ -26,11 +24,36 @@ User Request (Question + Files)  -->  [Planner AI]  -->  JSON Plan  -->  [Execut
 
 This architecture makes the agent incredibly flexible and capable of solving novel, multi-step problems it has never seen before.
 
-## How to Use the Live API
+## Running Locally
 
-Interact with the agent by sending a `POST` request to the live endpoint with `multipart/form-data`.
+Datalyst is not currently hosted anywhere; run it on your own machine.
 
-**Endpoint:** `https://datalyst-production.up.railway.app/api`
+**Prerequisites:** Python 3.11+ and an [AI Pipe](https://aipipe.org) token (used to reach the LLM via OpenRouter).
+
+1.  **Clone and install:**
+    ```bash
+    git clone https://github.com/ishaanseth/Datalyst.git
+    cd Datalyst
+    python -m venv venv
+    source venv/bin/activate  # On Windows: venv\Scripts\activate
+    pip install -r requirements.txt
+    ```
+2.  **Set your AI Pipe token** as an environment variable:
+    ```bash
+    export AIPIPE_TOKEN="your_aipipe_token"      # macOS/Linux
+    $env:AIPIPE_TOKEN = "your_aipipe_token"      # Windows PowerShell
+    ```
+3.  **Start the server:**
+    ```bash
+    uvicorn app.main:app --port 8000
+    ```
+    Interactive API docs are then available at `http://localhost:8000/docs`.
+
+## How to Use the API
+
+Once the server is running, send a `POST` request to the local endpoint with `multipart/form-data`.
+
+**Endpoint:** `http://localhost:8000/api`
 
 You must always include a form part named `questions.txt` containing your instructions. You can include any other necessary data files by naming the form part after the filename itself.
 
@@ -68,7 +91,7 @@ David,Eve
 
 **cURL Command:**
 ```bash
-curl -X POST "https://datalyst-production.up.railway.app/api" \
+curl -X POST "http://localhost:8000/api" \
 -F "questions.txt=@path/to/your/questions.txt" \
 -F "edges.csv=@path/to/your/edges.csv"
 ```
@@ -103,7 +126,7 @@ order_id,date,region,sales
 
 **cURL Command:**
 ```bash
-curl -X POST "https://datalyst-production.up.railway.app/api" \
+curl -X POST "http://localhost:8000/api" \
 -F "questions.txt=@path/to/your/questions.txt" \
 -F "sample-sales.csv=@path/to/your/sample-sales.csv"
 ```
@@ -115,7 +138,6 @@ curl -X POST "https://datalyst-production.up.railway.app/api" \
 *   **Data Manipulation:** Pandas
 *   **Plotting:** Matplotlib
 *   **Network Analysis:** NetworkX
-*   **Deployment:** Railway
 
 ## License
 
